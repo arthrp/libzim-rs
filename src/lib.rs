@@ -13,14 +13,3 @@ pub fn parse_zim(file_path: &str) -> Result<ZimFile, String> {
     let z = ZimFile::parse_bytes(&mut fr)?;
     Ok(z)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let x = true;
-        assert_eq!(x, true);
-    }
-}

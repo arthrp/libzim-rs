@@ -70,3 +70,18 @@ impl ZimFile {
         Ok(ZimFile { header })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_parse_bytes_less_than_80_bytes() {
+        let data = vec![0u8; 79];
+        let mut reader = Cursor::new(data);
+        let result = ZimFile::parse_bytes(&mut reader);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "failed to fill whole buffer");
+    }
+}
