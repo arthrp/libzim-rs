@@ -25,14 +25,30 @@ pub struct ZimHeader {
 pub struct ZimFile {
     pub header: ZimHeader,
     pub mime_types: Vec<String>,
+    pub cluster_pointers: Vec<u64>,
 }
 
 impl ZimFile {
     pub fn parse_bytes(reader: &mut (impl Read + Seek)) -> Result<Self, String> {
         let header = ZimFile::parse_header(reader)?;
         let mime_types = ZimFile::parse_mime_types(reader, &header)?;
+        let cluster_pointers = ZimFile::parse_cluster_pointers(reader, &header)?;
 
-        Ok(ZimFile { header, mime_types })
+        Ok(ZimFile { header, mime_types, cluster_pointers })
+    }
+
+    fn parse_cluster_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
+        reader.seek(SeekFrom::Start(header.cluster_ptr_pos)).map_err(|e| e.to_string())?;
+        
+        let mut pointers = Vec::with_capacity(header.cluster_count as usize);
+        let mut buffer = [0u8; 8];
+
+        for _ in 0..header.cluster_count {
+             reader.read_exact(&mut buffer).map_err(|e| e.to_string())?;
+             pointers.push(u64::from_le_bytes(buffer));
+        }
+        
+        Ok(pointers)
     }
 
     fn parse_mime_types(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<String>, String> {
@@ -155,17 +171,8 @@ mod tests {
         data[48..56].copy_from_slice(&cluster_ptr_pos);
         
         // Add mime types: "text/html\0image/png\0"
-        // Note: parse_mime_types expects null-terminated strings and stops at empty string (double null or end of buffer)
-        // But actually my implementation reads up to size and then iterates.
-        // "text/html\0image/png\0" is 10 + 10 = 20 bytes exactly?
-        // text/html is 9 chars + 1 null = 10 bytes.
-        // image/png is 9 chars + 1 null = 10 bytes.
-        // Total 20 bytes.
         let mime_data = b"text/html\0image/png\0";
         data.extend_from_slice(mime_data);
-        
-        // Ensure data is long enough (though Cursor will just be at end)
-        // size = 100 - 80 = 20.
         
         let mut reader = Cursor::new(data);
         let result = ZimFile::parse_bytes(&mut reader);
@@ -174,5 +181,53 @@ mod tests {
         assert_eq!(zim.mime_types.len(), 2);
         assert_eq!(zim.mime_types[0], "text/html");
         assert_eq!(zim.mime_types[1], "image/png");
+    }
+
+    #[test]
+    fn test_parse_cluster_pointers() {
+        let mut data = vec![0u8; HEADER_SIZE];
+        
+        let magic = ZIM_MAGIC_NUMBER.to_le_bytes();
+        data[0..4].copy_from_slice(&magic);
+        
+        let cluster_count = 2_u32.to_le_bytes();
+        data[28..32].copy_from_slice(&cluster_count);
+        
+        // Pointers
+        // mime_list_pos at 80
+        let mime_list_pos = 80_u64.to_le_bytes();
+        data[56..64].copy_from_slice(&mime_list_pos);
+        
+        // path_ptr_pos at 90 (10 bytes mime types)
+        let path_ptr_pos = 90_u64.to_le_bytes();
+        data[32..40].copy_from_slice(&path_ptr_pos);
+
+        // cluster_ptr_pos at 100 (10 bytes path ptrs - dummy)
+        let cluster_ptr_pos = 100_u64.to_le_bytes();
+        data[48..56].copy_from_slice(&cluster_ptr_pos);
+        
+        // Data construction
+        // 80: Mime types (dummy, 10 bytes)
+        data.extend(std::iter::repeat(0).take(10));
+        
+        // 90: Path pointers (dummy, 10 bytes)
+        data.extend(std::iter::repeat(0).take(10));
+        
+        // 100: Cluster pointers (2 * 8 = 16 bytes)
+        // Cluster 0 offset: 1000
+        let c0 = 1000_u64.to_le_bytes();
+        data.extend_from_slice(&c0);
+        
+        // Cluster 1 offset: 2000
+        let c1 = 2000_u64.to_le_bytes();
+        data.extend_from_slice(&c1);
+        
+        let mut reader = Cursor::new(data);
+        let zim = ZimFile::parse_bytes(&mut reader).expect("Parse failed");
+        
+        assert_eq!(zim.header.cluster_count, 2);
+        assert_eq!(zim.cluster_pointers.len(), 2);
+        assert_eq!(zim.cluster_pointers[0], 1000);
+        assert_eq!(zim.cluster_pointers[1], 2000);
     }
 }
