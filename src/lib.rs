@@ -2,6 +2,7 @@ use std::path::Path;
 use std::fs::File;
 
 mod zimfile;
+mod zimheader;
 
 pub use zimfile::*;
 
