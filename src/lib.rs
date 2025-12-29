@@ -3,6 +3,7 @@ use std::fs::File;
 
 mod zimfile;
 mod zimheader;
+mod cluster;
 
 pub use zimfile::*;
 

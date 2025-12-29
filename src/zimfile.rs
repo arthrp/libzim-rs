@@ -1,11 +1,13 @@
 use std::io::{Read, Seek, SeekFrom};
 use crate::zimheader::{ZimHeader};
+use crate::cluster::Cluster;
 
 #[derive(Debug)]
 pub struct ZimFile {
     pub header: ZimHeader,
     pub mime_types: Vec<String>,
     pub cluster_pointers: Vec<u64>,
+    pub clusters: Vec<Cluster>,
 }
 
 impl ZimFile {
@@ -13,8 +15,9 @@ impl ZimFile {
         let header = ZimHeader::parse_header(reader)?;
         let mime_types = ZimFile::parse_mime_types(reader, &header)?;
         let cluster_pointers = ZimFile::parse_cluster_pointers(reader, &header)?;
+        let clusters = ZimFile::parse_clusters(reader, &cluster_pointers)?;
 
-        Ok(ZimFile { header, mime_types, cluster_pointers })
+        Ok(ZimFile { header, mime_types, cluster_pointers, clusters })
     }
 
     fn parse_cluster_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
@@ -29,6 +32,18 @@ impl ZimFile {
         }
         
         Ok(pointers)
+    }
+
+    fn parse_clusters(reader: &mut (impl Read + Seek), cluster_pointers: &[u64]) -> Result<Vec<Cluster>, String> {
+        let mut clusters = Vec::with_capacity(cluster_pointers.len());
+        for &offset in cluster_pointers {
+            reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
+            // We pass a mutable reference to the reader. Cluster::new takes impl Read.
+            // Since reader is &mut (impl Read + Seek), it implements Read.
+            let cluster = Cluster::parse(&mut *reader)?;
+            clusters.push(cluster);
+        }
+        Ok(clusters)
     }
 
     fn parse_mime_types(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<String>, String> {
@@ -154,20 +169,51 @@ mod tests {
         data.extend(std::iter::repeat(0).take(10));
         
         // 100: Cluster pointers (2 * 8 = 16 bytes)
-        // Cluster 0 offset: 1000
-        let c0 = 1000_u64.to_le_bytes();
-        data.extend_from_slice(&c0);
+        // We need real offsets now because parse_clusters will read them.
+        let current_size = data.len() + 16; // 16 bytes for 2 pointers
+        let c0_offset = current_size as u64;
+        let c1_offset = c0_offset + 20; // Some space for first cluster
+
+        // Cluster 0 offset
+        data.extend_from_slice(&c0_offset.to_le_bytes());
+        // Cluster 1 offset
+        data.extend_from_slice(&c1_offset.to_le_bytes());
         
-        // Cluster 1 offset: 2000
-        let c1 = 2000_u64.to_le_bytes();
-        data.extend_from_slice(&c1);
+        // Create Cluster 0 data at c0_offset
+        // Compression: None (1) | Not extended
+        data.push(0x01); 
+        // Offsets table (4 bytes each)
+        // first offset = 8 (2 entries * 4)
+        data.extend_from_slice(&8u32.to_le_bytes()); 
+        // second offset = 10 (size 2)
+        data.extend_from_slice(&10u32.to_le_bytes());
+        // Blob data (2 bytes)
+        data.extend(vec![0xAA, 0xBB]);
         
+        // Padding/gap to reach c1_offset?
+        // c0_offset = 116. data len so far: 116 + 1 (comp) + 8 (offsets) + 2 (data) = 127.
+        // c1_offset was set to 116 + 20 = 136.
+        // Fill up to 136.
+        while data.len() < c1_offset as usize {
+            data.push(0);
+        }
+
+        // Create Cluster 1 data at c1_offset
+        // Compression: Zstd (5) | Extended (0x10) -> 0x15
+        data.push(0x15);
+        // data.push(0x00); // dummy data for zstd cluster? Cluster::new only reads 1 byte for compressed currently.
+
         let mut reader = Cursor::new(data);
         let zim = ZimFile::parse_bytes(&mut reader).expect("Parse failed");
         
         assert_eq!(zim.header.cluster_count, 2);
         assert_eq!(zim.cluster_pointers.len(), 2);
-        assert_eq!(zim.cluster_pointers[0], 1000);
-        assert_eq!(zim.cluster_pointers[1], 2000);
+        assert_eq!(zim.cluster_pointers[0], c0_offset);
+        assert_eq!(zim.cluster_pointers[1], c1_offset);
+        
+        assert_eq!(zim.clusters.len(), 2);
+        assert_eq!(zim.clusters[0].compression, crate::cluster::Compression::None);
+        assert_eq!(zim.clusters[0].count(), 1);
+        assert_eq!(zim.clusters[1].compression, crate::cluster::Compression::Zstd);
     }
 }

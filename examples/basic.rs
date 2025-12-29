@@ -11,4 +11,8 @@ fn main() {
     for c in zim_file.cluster_pointers {
         println!("pointer: {}", c)
     }
+
+    for cl in zim_file.clusters {
+        println!("cluster: {:?}", cl);
+    }
 }
