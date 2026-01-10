@@ -1,5 +1,7 @@
 use std::io::Read;
 
+const MAX_BLOBS: u64 = 1_000_000;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Compression {
     None = 1,
@@ -49,7 +51,7 @@ impl Cluster {
                 
                 let count = first_offset / 8;
                 // Basic sanity check to prevent OOM on bad data
-                if count > 1_000_000 {
+                if count > MAX_BLOBS {
                      return Err(format!("Too many blobs in cluster: {}", count));
                 }
 
@@ -65,7 +67,7 @@ impl Cluster {
                 blob_offsets.push(first_offset);
                 
                 let count = first_offset / 4;
-                if count > 1_000_000 {
+                if count > MAX_BLOBS {
                      return Err(format!("Too many blobs in cluster: {}", count));
                 }
 
