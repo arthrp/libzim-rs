@@ -1,6 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 use crate::zimheader::{ZimHeader};
 use crate::cluster::Cluster;
+use crate::dirent::Dirent;
 
 #[derive(Debug)]
 pub struct ZimFile {
@@ -8,6 +9,8 @@ pub struct ZimFile {
     pub mime_types: Vec<String>,
     pub cluster_pointers: Vec<u64>,
     pub clusters: Vec<Cluster>,
+    pub dirent_pointers: Vec<u64>,
+    pub dirents: Vec<Dirent>
 }
 
 impl ZimFile {
@@ -16,8 +19,34 @@ impl ZimFile {
         let mime_types = ZimFile::parse_mime_types(reader, &header)?;
         let cluster_pointers = ZimFile::parse_cluster_pointers(reader, &header)?;
         let clusters = ZimFile::parse_clusters(reader, &cluster_pointers)?;
+        let dirent_pointers = ZimFile::parse_dirent_pointers(reader, &header)?;
+        let dirents = ZimFile::parse_dirents(reader, &dirent_pointers)?;
 
-        Ok(ZimFile { header, mime_types, cluster_pointers, clusters })
+        Ok(ZimFile { header, mime_types, cluster_pointers, clusters, dirent_pointers, dirents })
+    }
+
+    fn parse_dirent_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
+        reader.seek(SeekFrom::Start(header.path_ptr_pos)).map_err(|e| e.to_string())?;
+
+        let mut pointers = Vec::with_capacity(header.article_count as usize);
+        let mut buffer = [0u8; 8];
+
+        for _ in 0..header.article_count {
+             reader.read_exact(&mut buffer).map_err(|e| e.to_string())?;
+             pointers.push(u64::from_le_bytes(buffer));
+        }
+
+        Ok(pointers)
+    }
+
+    fn parse_dirents(reader: &mut (impl Read + Seek), dirent_pointers: &[u64]) -> Result<Vec<Dirent>, String> {
+        let mut dirents = Vec::with_capacity(dirent_pointers.len());
+        for &offset in dirent_pointers {
+            reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
+            let dirent = Dirent::parse(&mut *reader)?;
+            dirents.push(dirent);
+        }
+        Ok(dirents)
     }
 
     fn parse_cluster_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
@@ -38,7 +67,6 @@ impl ZimFile {
         let mut clusters = Vec::with_capacity(cluster_pointers.len());
         for &offset in cluster_pointers {
             reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
-            // We pass a mutable reference to the reader. Cluster::new takes impl Read.
             // Since reader is &mut (impl Read + Seek), it implements Read.
             let cluster = Cluster::parse(&mut *reader)?;
             clusters.push(cluster);
@@ -215,5 +243,81 @@ mod tests {
         assert_eq!(zim.clusters[0].compression, crate::cluster::Compression::None);
         assert_eq!(zim.clusters[0].count(), 1);
         assert_eq!(zim.clusters[1].compression, crate::cluster::Compression::Zstd);
+    }
+
+    #[test]
+    fn test_parse_dirent_pointers_and_dirents() {
+        let mut data = vec![0u8; HEADER_SIZE];
+        
+        let magic = ZIM_MAGIC_NUMBER.to_le_bytes();
+        data[0..4].copy_from_slice(&magic);
+        
+        let article_count = 2_u32.to_le_bytes();
+        data[24..28].copy_from_slice(&article_count);
+        
+        // Pointers
+        // mime_list_pos at 80
+        let mime_list_pos = 80_u64.to_le_bytes();
+        data[56..64].copy_from_slice(&mime_list_pos);
+        
+        // path_ptr_pos at 90 (article_count * 8 = 16 bytes)
+        let path_ptr_pos = 90_u64.to_le_bytes();
+        data[32..40].copy_from_slice(&path_ptr_pos);
+
+        // cluster_ptr_pos at 120
+        let cluster_ptr_pos = 120_u64.to_le_bytes();
+        data[48..56].copy_from_slice(&cluster_ptr_pos);
+        
+        // Data construction
+        // 80: Mime types (dummy, 10 bytes)
+        data.extend(std::iter::repeat(0).take(10));
+        
+        // 90: Dirent pointers (2 * 8 = 16 bytes)
+        // Let's put dirents at the end of the current data + some offset
+        let d0_ptr = 150_u64;
+        let d1_ptr = 200_u64;
+        data.extend_from_slice(&d0_ptr.to_le_bytes());
+        data.extend_from_slice(&d1_ptr.to_le_bytes());
+        
+        // 106: So far. cluster_ptr_pos is 120. Add padding.
+        while data.len() < 120 {
+            data.push(0);
+        }
+
+        // 120: Cluster pointers (none since cluster_count = 0)
+        let cluster_count = 0_u32.to_le_bytes();
+        data[28..32].copy_from_slice(&cluster_count);
+
+        // Add Dirent 0 at d0_ptr (150)
+        while data.len() < d0_ptr as usize { data.push(0); }
+        // mime_type: 1, extra_len: 0, ns: 'C', revision: 0, cluster: 0, blob: 0, url: "u0\0", title: "t0\0"
+        data.extend_from_slice(&1u16.to_le_bytes());
+        data.push(0); data.push(b'C');
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(b"u0\0t0\0");
+
+        // Add Dirent 1 at d1_ptr (200)
+        while data.len() < d1_ptr as usize { data.push(0); }
+        // mime_type: 1, extra_len: 0, ns: 'C', revision: 0, cluster: 0, blob: 1, url: "u1\0", title: "t1\0"
+        data.extend_from_slice(&1u16.to_le_bytes());
+        data.push(0); data.push(b'C');
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.extend_from_slice(b"u1\0t1\0");
+
+        let mut reader = Cursor::new(data);
+        let zim = ZimFile::parse_bytes(&mut reader).expect("Parse failed");
+        
+        assert_eq!(zim.header.article_count, 2);
+        assert_eq!(zim.dirent_pointers.len(), 2);
+        assert_eq!(zim.dirent_pointers[0], d0_ptr);
+        assert_eq!(zim.dirent_pointers[1], d1_ptr);
+
+        assert_eq!(zim.dirents.len(), 2);
+        assert_eq!(zim.dirents[0].url, "u0");
+        assert_eq!(zim.dirents[1].url, "u1");
     }
 }
