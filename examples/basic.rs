@@ -15,4 +15,8 @@ fn main() {
     for cl in zim_file.clusters {
         println!("cluster: {:?}", cl);
     }
+
+    for de in zim_file.dirents {
+        println!("dirent: {:?}", de);
+    }
 }

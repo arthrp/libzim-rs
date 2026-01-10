@@ -4,6 +4,7 @@ use std::fs::File;
 mod zimfile;
 mod zimheader;
 mod cluster;
+mod dirent;
 
 pub use zimfile::*;
 
