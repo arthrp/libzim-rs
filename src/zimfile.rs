@@ -8,6 +8,7 @@ pub struct ZimFile {
     pub mime_types: Vec<String>,
     pub cluster_pointers: Vec<u64>,
     pub clusters: Vec<Cluster>,
+    pub dirent_pointers: Vec<u64>
 }
 
 impl ZimFile {
@@ -16,8 +17,23 @@ impl ZimFile {
         let mime_types = ZimFile::parse_mime_types(reader, &header)?;
         let cluster_pointers = ZimFile::parse_cluster_pointers(reader, &header)?;
         let clusters = ZimFile::parse_clusters(reader, &cluster_pointers)?;
+        let dirent_pointers = ZimFile::parse_dirent_pointers(reader, &header)?;
 
-        Ok(ZimFile { header, mime_types, cluster_pointers, clusters })
+        Ok(ZimFile { header, mime_types, cluster_pointers, clusters, dirent_pointers })
+    }
+
+    fn parse_dirent_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
+        reader.seek(SeekFrom::Start(header.path_ptr_pos)).map_err(|e| e.to_string())?;
+
+        let mut pointers = Vec::with_capacity(header.article_count as usize);
+        let mut buffer = [0u8; 8];
+
+        for _ in 0..header.article_count {
+             reader.read_exact(&mut buffer).map_err(|e| e.to_string())?;
+             pointers.push(u64::from_le_bytes(buffer));
+        }
+
+        Ok(pointers)
     }
 
     fn parse_cluster_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
@@ -38,7 +54,6 @@ impl ZimFile {
         let mut clusters = Vec::with_capacity(cluster_pointers.len());
         for &offset in cluster_pointers {
             reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
-            // We pass a mutable reference to the reader. Cluster::new takes impl Read.
             // Since reader is &mut (impl Read + Seek), it implements Read.
             let cluster = Cluster::parse(&mut *reader)?;
             clusters.push(cluster);
@@ -215,5 +230,60 @@ mod tests {
         assert_eq!(zim.clusters[0].compression, crate::cluster::Compression::None);
         assert_eq!(zim.clusters[0].count(), 1);
         assert_eq!(zim.clusters[1].compression, crate::cluster::Compression::Zstd);
+    }
+
+    #[test]
+    fn test_parse_dirent_pointers() {
+        let mut data = vec![0u8; HEADER_SIZE];
+        
+        let magic = ZIM_MAGIC_NUMBER.to_le_bytes();
+        data[0..4].copy_from_slice(&magic);
+        
+        let article_count = 3_u32.to_le_bytes();
+        data[24..28].copy_from_slice(&article_count);
+        
+        // Pointers
+        // mime_list_pos at 80
+        let mime_list_pos = 80_u64.to_le_bytes();
+        data[56..64].copy_from_slice(&mime_list_pos);
+        
+        // path_ptr_pos at 90 (article_count * 8 = 24 bytes)
+        let path_ptr_pos = 90_u64.to_le_bytes();
+        data[32..40].copy_from_slice(&path_ptr_pos);
+
+        // cluster_ptr_pos at 120
+        let cluster_ptr_pos = 120_u64.to_le_bytes();
+        data[48..56].copy_from_slice(&cluster_ptr_pos);
+        
+        // Data construction
+        // 80: Mime types (dummy, 10 bytes)
+        data.extend(std::iter::repeat(0).take(10));
+        
+        // 90: Dirent pointers (3 * 8 = 24 bytes)
+        let d0_ptr = 1000_u64;
+        let d1_ptr = 2000_u64;
+        let d2_ptr = 3000_u64;
+        data.extend_from_slice(&d0_ptr.to_le_bytes());
+        data.extend_from_slice(&d1_ptr.to_le_bytes());
+        data.extend_from_slice(&d2_ptr.to_le_bytes());
+        
+        // 114: So far. cluster_ptr_pos is 120. Add padding.
+        while data.len() < 120 {
+            data.push(0);
+        }
+
+        // 120: Cluster pointers (dummy, but parse_clusters will try to read them if cluster_count > 0)
+        // Let's set cluster_count to 0 for this test.
+        let cluster_count = 0_u32.to_le_bytes();
+        data[28..32].copy_from_slice(&cluster_count);
+
+        let mut reader = Cursor::new(data);
+        let zim = ZimFile::parse_bytes(&mut reader).expect("Parse failed");
+        
+        assert_eq!(zim.header.article_count, 3);
+        assert_eq!(zim.dirent_pointers.len(), 3);
+        assert_eq!(zim.dirent_pointers[0], d0_ptr);
+        assert_eq!(zim.dirent_pointers[1], d1_ptr);
+        assert_eq!(zim.dirent_pointers[2], d2_ptr);
     }
 }
