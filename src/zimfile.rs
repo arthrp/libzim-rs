@@ -204,6 +204,52 @@ impl ZimFile {
     pub fn cached_cluster_count(&self) -> usize {
         self.store.lock().map(|s| s.cache.len()).unwrap_or(0)
     }
+
+    pub fn metadata_keys(&self) -> Vec<String> {
+        self.dirents
+            .iter()
+            .filter(|d| d.namespace == 'M')
+            .map(|d| d.url.clone())
+            .collect()
+    }
+
+    pub fn get_metadata(&self, name: &str) -> Option<Vec<u8>> {
+        let dirent = self.find_metadata_dirent(name)?;
+        self.get_content(dirent)
+    }
+
+    pub fn get_metadata_str(&self, name: &str) -> Option<String> {
+        let bytes = self.get_metadata(name)?;
+        let mut s = String::from_utf8(bytes).ok()?;
+        if s.ends_with('\0') {
+            s.pop();
+        }
+        Some(s)
+    }
+
+    fn find_metadata_dirent(&self, name: &str) -> Option<&Dirent> {
+        let mut idx = self
+            .dirents
+            .iter()
+            .position(|d| d.namespace == 'M' && d.url == name)?;
+
+        let mut watchdog = 50;
+        loop {
+            let dirent = &self.dirents[idx];
+            if let DirentData::Redirect { redirect_index } = dirent.data {
+                if watchdog == 0 {
+                    return None;
+                }
+                watchdog -= 1;
+                idx = redirect_index as usize;
+                if idx >= self.dirents.len() {
+                    return None;
+                }
+            } else {
+                return Some(dirent);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -428,6 +474,109 @@ mod tests {
         let content = zim.get_content(&zim.dirents[0]).expect("content");
         assert_eq!(content, b"hello");
         assert_eq!(zim.get_mime_type(zim.dirents[0].mime_type), None);
+    }
+
+    #[test]
+    fn test_metadata() {
+        use crate::dirent::REDIRECT_MIME_TYPE;
+
+        let mut data = vec![0u8; HEADER_SIZE];
+
+        let magic = ZIM_MAGIC_NUMBER.to_le_bytes();
+        data[0..4].copy_from_slice(&magic);
+
+        let article_count = 3_u32.to_le_bytes();
+        data[24..28].copy_from_slice(&article_count);
+
+        let cluster_count = 1_u32.to_le_bytes();
+        data[28..32].copy_from_slice(&cluster_count);
+
+        let mime_list_pos = 80_u64.to_le_bytes();
+        data[56..64].copy_from_slice(&mime_list_pos);
+
+        let path_ptr_pos = 100_u64.to_le_bytes();
+        data[32..40].copy_from_slice(&path_ptr_pos);
+
+        let cluster_ptr_pos = 124_u64.to_le_bytes();
+        data[48..56].copy_from_slice(&cluster_ptr_pos);
+
+        data.extend(std::iter::repeat(0).take(20));
+
+        let c0_offset = 132_u64;
+        let d0_ptr = 157_u64;
+        let d1_ptr = 184_u64;
+        let d2_ptr = 213_u64;
+
+        data.extend_from_slice(&d0_ptr.to_le_bytes());
+        data.extend_from_slice(&d1_ptr.to_le_bytes());
+        data.extend_from_slice(&d2_ptr.to_le_bytes());
+
+        while data.len() < 124 {
+            data.push(0);
+        }
+
+        data.extend_from_slice(&c0_offset.to_le_bytes());
+
+        while data.len() < c0_offset as usize {
+            data.push(0);
+        }
+
+        data.push(0x01);
+        data.extend_from_slice(&12u32.to_le_bytes());
+        data.extend_from_slice(&17u32.to_le_bytes());
+        data.extend_from_slice(&24u32.to_le_bytes());
+        data.extend_from_slice(b"Kiwix");
+        data.extend_from_slice(b"Offline");
+
+        while data.len() < d0_ptr as usize {
+            data.push(0);
+        }
+
+        // M/Publisher -> cluster 0, blob 0
+        data.extend_from_slice(&1u16.to_le_bytes());
+        data.push(0);
+        data.push(b'M');
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(b"Publisher\0\0");
+
+        while data.len() < d1_ptr as usize {
+            data.push(0);
+        }
+
+        // M/Description -> cluster 0, blob 1
+        data.extend_from_slice(&1u16.to_le_bytes());
+        data.push(0);
+        data.push(b'M');
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&1u32.to_le_bytes());
+        data.extend_from_slice(b"Description\0\0");
+
+        while data.len() < d2_ptr as usize {
+            data.push(0);
+        }
+
+        // M/Title -> redirect to dirent 0 (Publisher)
+        data.extend_from_slice(&REDIRECT_MIME_TYPE.to_le_bytes());
+        data.push(0);
+        data.push(b'M');
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        data.extend_from_slice(b"Title\0\0");
+
+        let zim = ZimFile::parse_bytes(Cursor::new(data)).expect("Parse failed");
+
+        let mut keys = zim.metadata_keys();
+        keys.sort();
+        assert_eq!(keys, vec!["Description", "Publisher", "Title"]);
+
+        assert_eq!(zim.get_metadata_str("Publisher"), Some("Kiwix".to_string()));
+        assert_eq!(zim.get_metadata_str("Description"), Some("Offline".to_string()));
+        assert_eq!(zim.get_metadata_str("Title"), Some("Kiwix".to_string()));
+        assert_eq!(zim.get_metadata_str("Unknown"), None);
+        assert_eq!(zim.get_metadata("Publisher"), Some(b"Kiwix".to_vec()));
     }
 
     #[test]

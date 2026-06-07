@@ -47,7 +47,8 @@ impl Cluster {
         let (blob_offsets, blob_data) = if compression == Compression::Zstd {
             let mut decompressed = Vec::new();
             let mut decoder = zstd::stream::read::Decoder::new(&mut reader)
-                .map_err(|e| format!("Failed to create zstd decoder: {}", e))?;
+                .map_err(|e| format!("Failed to create zstd decoder: {}", e))?
+                .single_frame();
             decoder
                 .read_to_end(&mut decompressed)
                 .map_err(|e| format!("Failed to decompress zstd cluster: {}", e))?;
@@ -221,6 +222,32 @@ mod tests {
 
         assert_eq!(cluster.compression, Compression::Zstd);
         assert!(!cluster.is_extended);
+        assert_eq!(cluster.count(), 2);
+        assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
+        assert_eq!(cluster.get_blob(1), Some(&[0xBB; 5][..]));
+    }
+
+    #[test]
+    fn test_parse_zstd_cluster_with_trailing_data() {
+        // A real ZIM stores clusters contiguously, so the bytes following a
+        // zstd frame belong to the next cluster. The decoder must stop at the
+        // frame boundary rather than trying to read the trailing data as
+        // another concatenated frame.
+        let payload = build_uncompressed_cluster_payload();
+        let compressed = zstd::stream::encode_all(payload.as_slice(), 0)
+            .expect("Failed to compress test cluster");
+
+        let mut data = Vec::new();
+        data.push(0x05); // Zstd, not extended
+        data.extend_from_slice(&compressed);
+        // Trailing bytes that are NOT a valid zstd frame (e.g. the next cluster).
+        data.push(0x05);
+        data.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+
+        let mut reader = Cursor::new(data);
+        let cluster = Cluster::parse(&mut reader).expect("Failed to parse zstd cluster");
+
+        assert_eq!(cluster.compression, Compression::Zstd);
         assert_eq!(cluster.count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
         assert_eq!(cluster.get_blob(1), Some(&[0xBB; 5][..]));

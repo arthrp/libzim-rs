@@ -18,29 +18,19 @@ fn main() {
 
     println!("cached clusters: {}", zim_file.cached_cluster_count());
 
-    for dirent in &zim_file.dirents {
-        println!("dirent: {:?}", dirent);
-
-        if !dirent.is_article() {
-            continue;
+    println!("metadata:");
+    for key in zim_file.metadata_keys() {
+        match zim_file.get_metadata_str(&key) {
+            Some(val) => println!("  {key}: {val}"),
+            None => {
+                if let Some(bytes) = zim_file.get_metadata(&key) {
+                    println!("  {key}: <binary, {} bytes>", bytes.len());
+                } else {
+                    println!("  {key}: <no content>");
+                }
+            }
         }
-
-        let mime = zim_file
-            .get_mime_type(dirent.mime_type)
-            .unwrap_or("unknown");
-        let content = zim_file.get_content(dirent);
-
-        // match content {
-        //     Some(bytes) => {
-        //         println!("  mime: {}, size: {} bytes", mime, bytes.len());
-        //         if let Ok(text) = std::str::from_utf8(&bytes) {
-        //             let preview: String = text.chars().take(120).collect();
-        //             println!("  preview: {}", preview);
-        //         }
-        //     }
-        //     None => println!("  no content available"),
-        // }
     }
 
-    println!("cached clusters aftewards: {}", zim_file.cached_cluster_count());
+    println!("Name: {}", zim_file.get_metadata_str("Name").unwrap_or("".to_string()));
 }
