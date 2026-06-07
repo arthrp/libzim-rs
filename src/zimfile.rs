@@ -184,6 +184,18 @@ impl ZimFile {
         cluster.get_blob(blob_number).map(|b| b.to_vec())
     }
 
+    pub fn blob_count(&self, cluster_number: usize) -> Option<usize> {
+        let offset = *self.cluster_pointers.get(cluster_number)?;
+        let mut store = self.store.lock().ok()?;
+        Some(store.cluster(cluster_number, offset)?.blob_count())
+    }
+
+    pub fn blob_size(&self, cluster_number: usize, blob_number: usize) -> Option<u64> {
+        let offset = *self.cluster_pointers.get(cluster_number)?;
+        let mut store = self.store.lock().ok()?;
+        store.cluster(cluster_number, offset)?.get_blob_size(blob_number)
+    }
+
     pub fn get_content(&self, dirent: &Dirent) -> Option<Vec<u8>> {
         match dirent.data {
             DirentData::Content {

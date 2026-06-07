@@ -12,8 +12,16 @@ fn main() {
         println!("Mime found: {}", m);
     }
 
-    for c in &zim_file.cluster_pointers {
+    for (i, c) in zim_file.cluster_pointers.iter().enumerate() {
         println!("pointer: {}", c);
+        if let Some(n) = zim_file.blob_count(i) {
+            println!("  cluster {i}: {n} blobs");
+            for b in 0..n {
+                if let Some(sz) = zim_file.blob_size(i, b) {
+                    println!("    blob {b}: {sz} bytes");
+                }
+            }
+        }
     }
 
     println!("cached clusters: {}", zim_file.cached_cluster_count());

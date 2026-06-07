@@ -65,7 +65,7 @@ impl Cluster {
         })
     }
 
-    pub fn count(&self) -> usize {
+    pub fn blob_count(&self) -> usize {
         if self.blob_offsets.is_empty() {
             0
         } else {
@@ -200,7 +200,7 @@ mod tests {
         assert_eq!(cluster.blob_offsets[1], 22);
         assert_eq!(cluster.blob_offsets[2], 27);
 
-        assert_eq!(cluster.count(), 2);
+        assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob_size(0), Some(10));
         assert_eq!(cluster.get_blob_size(1), Some(5));
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
@@ -222,7 +222,7 @@ mod tests {
 
         assert_eq!(cluster.compression, Compression::Zstd);
         assert!(!cluster.is_extended);
-        assert_eq!(cluster.count(), 2);
+        assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
         assert_eq!(cluster.get_blob(1), Some(&[0xBB; 5][..]));
     }
@@ -248,7 +248,7 @@ mod tests {
         let cluster = Cluster::parse(&mut reader).expect("Failed to parse zstd cluster");
 
         assert_eq!(cluster.compression, Compression::Zstd);
-        assert_eq!(cluster.count(), 2);
+        assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
         assert_eq!(cluster.get_blob(1), Some(&[0xBB; 5][..]));
     }
@@ -268,7 +268,7 @@ mod tests {
 
         assert_eq!(cluster.compression, Compression::Zstd);
         assert!(cluster.is_extended);
-        assert_eq!(cluster.count(), 2);
+        assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
     }
 
