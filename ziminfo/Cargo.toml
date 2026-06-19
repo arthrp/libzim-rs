@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-libzim-rs = { path = "../libzim-rs" }
+libzim-rs = { path = "../libzim-rs", version = "0.1.0" }

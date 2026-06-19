@@ -29,4 +29,4 @@ Compared to the reference [libzim](https://github.com/openzim/libzim) (ZIM 6.3):
 - [ ] Random entry, illustrations/favicon access
 - [ ] Split ZIM (multipart) and embedded ZIM (fd + offset) reading
 - [ ] Checksum verification and integrity checks
-- [ ] ZIM file creation/writing (read-only)
+- [ ] ZIM file creation/writing
