@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "libzim-rs/Cargo.toml",
+    "ziminfo/Cargo.toml"
+  ]
+}

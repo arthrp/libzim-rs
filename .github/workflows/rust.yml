@@ -16,7 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Build libzim-rs
+      run: cargo build --verbose --manifest-path libzim-rs/Cargo.toml
+    - name: Test libzim-rs
+      run: cargo test --verbose --manifest-path libzim-rs/Cargo.toml
+    - name: Build ziminfo
+      run: cargo build --verbose --manifest-path ziminfo/Cargo.toml
+    - name: Test ziminfo
+      run: cargo test --verbose --manifest-path ziminfo/Cargo.toml
