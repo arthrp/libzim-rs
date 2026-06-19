@@ -2,6 +2,13 @@
 name = "libzim-rs"
 version = "0.1.0"
 edition = "2024"
+authors = ["arthrp"]
+license = "GPL-3.0-only"
+description = "Library to read/write zim files. Supports only zim 6.3+"
+keywords = ["zim", "libzim"]
+homepage = "https://github.com/arthrp/libzim-rs"
+repository = "https://github.com/arthrp/libzim-rs"
+readme = "../README.md"
 
 [dependencies]
 zstd = "0.13"

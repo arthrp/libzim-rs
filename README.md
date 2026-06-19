@@ -1,6 +1,6 @@
 # libzim-rs
 
-Rust library to parse [zim](https://wiki.openzim.org/wiki/ZIM_file_format) files.
+Rust library to parse (and later create) [zim](https://wiki.openzim.org/wiki/ZIM_file_format) files.
 
 ## Motivation
 

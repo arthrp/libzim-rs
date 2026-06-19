@@ -2,6 +2,13 @@
 name = "ziminfo"
 version = "0.1.0"
 edition = "2024"
+authors = ["arthrp"]
+license = "GPL-3.0-only"
+description = "Utility to get info about a zim file"
+keywords = ["zim", "zim info"]
+homepage = "https://github.com/arthrp/libzim-rs"
+repository = "https://github.com/arthrp/libzim-rs"
+
 
 [dependencies]
 libzim-rs = { path = "../libzim-rs", version = "0.1.0" }
