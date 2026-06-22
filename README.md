@@ -1,6 +1,8 @@
 # libzim-rs
 
-Rust library to parse (and later create) [zim](https://wiki.openzim.org/wiki/ZIM_file_format) files.
+This is a monorepo with libzim-rs and related tools. READMEs for the individual tools can be found in their respective root directories.
+
+libzim-rs is a Rust library to parse (and later create) [zim](https://wiki.openzim.org/wiki/ZIM_file_format) files.
 
 ## Motivation
 
