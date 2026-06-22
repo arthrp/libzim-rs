@@ -32,7 +32,7 @@ impl ZimHeader {
 
         let major_version = u16::from_le_bytes(buffer[4..6].try_into().unwrap());
         let minor_version = u16::from_le_bytes(buffer[6..8].try_into().unwrap());
-        
+
         let mut uuid = [0u8; 16];
         uuid.copy_from_slice(&buffer[8..24]);
 

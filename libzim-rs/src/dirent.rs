@@ -6,13 +6,8 @@ pub const DELETED_MIME_TYPE: u16 = 0xfffd;
 
 #[derive(Debug)]
 pub enum DirentData {
-    Content {
-        cluster_number: u32,
-        blob_number: u32,
-    },
-    Redirect {
-        redirect_index: u32,
-    },
+    Content { cluster_number: u32, blob_number: u32 },
+    Redirect { redirect_index: u32 },
     LinkTarget,
     Deleted,
 }
@@ -96,11 +91,7 @@ impl Dirent {
     }
 
     pub fn get_title(&self) -> &str {
-        if self.title.is_empty() {
-            &self.url
-        } else {
-            &self.title
-        }
+        if self.title.is_empty() { &self.url } else { &self.title }
     }
 }
 
@@ -161,7 +152,11 @@ mod tests {
         assert_eq!(dirent.namespace, 'C');
         assert_eq!(dirent.revision, 123);
         assert!(dirent.is_article());
-        if let DirentData::Content { cluster_number, blob_number } = dirent.data {
+        if let DirentData::Content {
+            cluster_number,
+            blob_number,
+        } = dirent.data
+        {
             assert_eq!(cluster_number, 10);
             assert_eq!(blob_number, 20);
         } else {

@@ -78,10 +78,7 @@ impl ZimFile {
         })
     }
 
-    fn parse_dirent_pointers(
-        reader: &mut (impl Read + Seek),
-        header: &ZimHeader,
-    ) -> Result<Vec<u64>, String> {
+    fn parse_dirent_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
         reader
             .seek(SeekFrom::Start(header.path_ptr_pos))
             .map_err(|e| e.to_string())?;
@@ -97,25 +94,17 @@ impl ZimFile {
         Ok(pointers)
     }
 
-    fn parse_dirents(
-        reader: &mut (impl Read + Seek),
-        dirent_pointers: &[u64],
-    ) -> Result<Vec<Dirent>, String> {
+    fn parse_dirents(reader: &mut (impl Read + Seek), dirent_pointers: &[u64]) -> Result<Vec<Dirent>, String> {
         let mut dirents = Vec::with_capacity(dirent_pointers.len());
         for &offset in dirent_pointers {
-            reader
-                .seek(SeekFrom::Start(offset))
-                .map_err(|e| e.to_string())?;
+            reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
             let dirent = Dirent::parse(&mut *reader)?;
             dirents.push(dirent);
         }
         Ok(dirents)
     }
 
-    fn parse_cluster_pointers(
-        reader: &mut (impl Read + Seek),
-        header: &ZimHeader,
-    ) -> Result<Vec<u64>, String> {
+    fn parse_cluster_pointers(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<u64>, String> {
         reader
             .seek(SeekFrom::Start(header.cluster_ptr_pos))
             .map_err(|e| e.to_string())?;
@@ -131,10 +120,7 @@ impl ZimFile {
         Ok(pointers)
     }
 
-    fn parse_mime_types(
-        reader: &mut (impl Read + Seek),
-        header: &ZimHeader,
-    ) -> Result<Vec<String>, String> {
+    fn parse_mime_types(reader: &mut (impl Read + Seek), header: &ZimHeader) -> Result<Vec<String>, String> {
         let mut end_pos = header.path_ptr_pos;
         if header.title_idx_pos > 0 {
             end_pos = std::cmp::min(end_pos, header.title_idx_pos);
@@ -151,9 +137,7 @@ impl ZimFile {
             // TODO: log warning
         }
 
-        reader
-            .seek(SeekFrom::Start(start_pos))
-            .map_err(|e| e.to_string())?;
+        reader.seek(SeekFrom::Start(start_pos)).map_err(|e| e.to_string())?;
         let mut buffer = vec![0u8; size];
         reader.read_exact(&mut buffer).map_err(|e| e.to_string())?;
 
@@ -240,10 +224,7 @@ impl ZimFile {
     }
 
     fn find_metadata_dirent(&self, name: &str) -> Option<&Dirent> {
-        let mut idx = self
-            .dirents
-            .iter()
-            .position(|d| d.namespace == 'M' && d.url == name)?;
+        let mut idx = self.dirents.iter().position(|d| d.namespace == 'M' && d.url == name)?;
 
         let mut watchdog = 50;
         loop {
@@ -347,8 +328,8 @@ mod tests {
         zstd_payload.extend_from_slice(&16u64.to_le_bytes());
         zstd_payload.extend_from_slice(&18u64.to_le_bytes());
         zstd_payload.extend(vec![0xCC, 0xDD]);
-        let zstd_compressed = zstd::stream::encode_all(zstd_payload.as_slice(), 0)
-            .expect("Failed to compress test cluster");
+        let zstd_compressed =
+            zstd::stream::encode_all(zstd_payload.as_slice(), 0).expect("Failed to compress test cluster");
         data.push(0x15);
         data.extend_from_slice(&zstd_compressed);
 
@@ -636,8 +617,7 @@ mod tests {
         data.extend_from_slice(&14u32.to_le_bytes());
         data.extend(b"second");
 
-        let zim = ZimFile::parse_bytes_with_cache_capacity(Cursor::new(data), 1)
-            .expect("Parse failed");
+        let zim = ZimFile::parse_bytes_with_cache_capacity(Cursor::new(data), 1).expect("Parse failed");
 
         assert_eq!(zim.get_blob(0, 0), Some(b"first".to_vec()));
         assert_eq!(zim.cached_cluster_count(), 1);

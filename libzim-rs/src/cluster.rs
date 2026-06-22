@@ -91,10 +91,7 @@ impl Cluster {
     }
 }
 
-fn read_cluster_payload(
-    reader: &mut impl Read,
-    is_extended: bool,
-) -> Result<(Vec<u64>, Vec<u8>), String> {
+fn read_cluster_payload(reader: &mut impl Read, is_extended: bool) -> Result<(Vec<u64>, Vec<u8>), String> {
     let blob_offsets = read_blob_offsets(reader, is_extended)?;
 
     let mut blob_data = Vec::new();
@@ -210,8 +207,7 @@ mod tests {
     #[test]
     fn test_parse_zstd_cluster() {
         let payload = build_uncompressed_cluster_payload();
-        let compressed = zstd::stream::encode_all(payload.as_slice(), 0)
-            .expect("Failed to compress test cluster");
+        let compressed = zstd::stream::encode_all(payload.as_slice(), 0).expect("Failed to compress test cluster");
 
         let mut data = Vec::new();
         data.push(0x05); // Zstd, not extended
@@ -234,8 +230,7 @@ mod tests {
         // frame boundary rather than trying to read the trailing data as
         // another concatenated frame.
         let payload = build_uncompressed_cluster_payload();
-        let compressed = zstd::stream::encode_all(payload.as_slice(), 0)
-            .expect("Failed to compress test cluster");
+        let compressed = zstd::stream::encode_all(payload.as_slice(), 0).expect("Failed to compress test cluster");
 
         let mut data = Vec::new();
         data.push(0x05); // Zstd, not extended
@@ -256,8 +251,7 @@ mod tests {
     #[test]
     fn test_parse_compressed_cluster_info() {
         let payload = build_extended_cluster_payload();
-        let compressed = zstd::stream::encode_all(payload.as_slice(), 0)
-            .expect("Failed to compress test cluster");
+        let compressed = zstd::stream::encode_all(payload.as_slice(), 0).expect("Failed to compress test cluster");
 
         let mut data = Vec::new();
         data.push(0x15); // Zstd (5) | Extended (0x10)
