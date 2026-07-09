@@ -3,7 +3,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::sync::Mutex;
 
 use crate::cache::ClusterCache;
-use crate::cluster::Cluster;
+use crate::cluster::{Cluster, Compression};
 use crate::dirent::{Dirent, DirentData};
 use crate::zimheader::ZimHeader;
 
@@ -34,7 +34,7 @@ pub struct ZimFile {
     pub cluster_pointers: Vec<u64>,
     pub dirent_pointers: Vec<u64>,
     pub dirents: Vec<Dirent>,
-    store: Mutex<ClusterStore>,
+    cluster_store: Mutex<ClusterStore>,
 }
 
 impl fmt::Debug for ZimFile {
@@ -74,7 +74,7 @@ impl ZimFile {
             cluster_pointers,
             dirent_pointers,
             dirents,
-            store,
+            cluster_store: store,
         })
     }
 
@@ -163,21 +163,27 @@ impl ZimFile {
 
     pub fn get_blob(&self, cluster_number: usize, blob_number: usize) -> Option<Vec<u8>> {
         let offset = *self.cluster_pointers.get(cluster_number)?;
-        let mut store = self.store.lock().ok()?;
+        let mut store = self.cluster_store.lock().ok()?;
         let cluster = store.cluster(cluster_number, offset)?;
         cluster.get_blob(blob_number).map(|b| b.to_vec())
     }
 
     pub fn blob_count(&self, cluster_number: usize) -> Option<usize> {
         let offset = *self.cluster_pointers.get(cluster_number)?;
-        let mut store = self.store.lock().ok()?;
+        let mut store = self.cluster_store.lock().ok()?;
         Some(store.cluster(cluster_number, offset)?.blob_count())
     }
 
     pub fn blob_size(&self, cluster_number: usize, blob_number: usize) -> Option<u64> {
         let offset = *self.cluster_pointers.get(cluster_number)?;
-        let mut store = self.store.lock().ok()?;
+        let mut store = self.cluster_store.lock().ok()?;
         store.cluster(cluster_number, offset)?.get_blob_size(blob_number)
+    }
+
+    pub fn cluster_compression(&self, cluster_number: usize) -> Option<Compression> {
+        let offset = *self.cluster_pointers.get(cluster_number)?;
+        let mut store = self.cluster_store.lock().ok()?;
+        Some(store.cluster(cluster_number, offset)?.compression)
     }
 
     pub fn get_content(&self, dirent: &Dirent) -> Option<Vec<u8>> {
@@ -198,7 +204,7 @@ impl ZimFile {
     }
 
     pub fn cached_cluster_count(&self) -> usize {
-        self.store.lock().map(|s| s.cache.len()).unwrap_or(0)
+        self.cluster_store.lock().map(|s| s.cache.len()).unwrap_or(0)
     }
 
     pub fn metadata_keys(&self) -> Vec<String> {
@@ -343,6 +349,8 @@ mod tests {
 
         assert_eq!(zim.get_blob(0, 0), Some(vec![0xAA, 0xBB]));
         assert_eq!(zim.get_blob(1, 0), Some(vec![0xCC, 0xDD]));
+        assert_eq!(zim.cluster_compression(0), Some(Compression::None));
+        assert_eq!(zim.cluster_compression(1), Some(Compression::Zstd));
         assert_eq!(zim.cached_cluster_count(), 2);
     }
 

@@ -14,7 +14,6 @@ pub enum Compression {
 #[derive(Debug)]
 pub struct Cluster {
     pub compression: Compression,
-    pub is_extended: bool,
     pub blob_offsets: Vec<u64>,
     blob_data: Vec<u8>,
 }
@@ -59,7 +58,6 @@ impl Cluster {
 
         Ok(Cluster {
             compression,
-            is_extended,
             blob_offsets,
             blob_data,
         })
@@ -190,9 +188,8 @@ mod tests {
         let mut reader = Cursor::new(data);
         let cluster = Cluster::parse(&mut reader).expect("Failed to parse cluster");
 
-        assert_eq!(cluster.compression, Compression::None);
-        assert!(!cluster.is_extended);
         assert_eq!(cluster.blob_offsets.len(), 3);
+        assert_eq!(cluster.compression, Compression::None);
         assert_eq!(cluster.blob_offsets[0], 12);
         assert_eq!(cluster.blob_offsets[1], 22);
         assert_eq!(cluster.blob_offsets[2], 27);
@@ -217,7 +214,6 @@ mod tests {
         let cluster = Cluster::parse(&mut reader).expect("Failed to parse zstd cluster");
 
         assert_eq!(cluster.compression, Compression::Zstd);
-        assert!(!cluster.is_extended);
         assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
         assert_eq!(cluster.get_blob(1), Some(&[0xBB; 5][..]));
@@ -242,7 +238,6 @@ mod tests {
         let mut reader = Cursor::new(data);
         let cluster = Cluster::parse(&mut reader).expect("Failed to parse zstd cluster");
 
-        assert_eq!(cluster.compression, Compression::Zstd);
         assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
         assert_eq!(cluster.get_blob(1), Some(&[0xBB; 5][..]));
@@ -260,8 +255,6 @@ mod tests {
         let mut reader = Cursor::new(data);
         let cluster = Cluster::parse(&mut reader).expect("Failed to parse cluster");
 
-        assert_eq!(cluster.compression, Compression::Zstd);
-        assert!(cluster.is_extended);
         assert_eq!(cluster.blob_count(), 2);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA; 10][..]));
     }

@@ -59,7 +59,7 @@ impl ClusterCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster::{Cluster, Compression};
+    use crate::cluster::Cluster;
     use std::io::Cursor;
 
     fn make_cluster(compression_byte: u8, payload: Vec<u8>) -> Cluster {
@@ -141,7 +141,6 @@ mod tests {
         cache.put(0, make_cluster(0x01, uncompressed_payload()));
 
         let cluster = cache.get(0).expect("cluster");
-        assert_eq!(cluster.compression, Compression::None);
         assert_eq!(cluster.get_blob(0), Some(&[0xAA, 0xBB][..]));
     }
 }

@@ -7,6 +7,7 @@ mod dirent;
 mod zimfile;
 mod zimheader;
 
+pub use cluster::{Cluster, Compression};
 pub use zimfile::*;
 
 pub fn parse_zim(file_path: &str) -> Result<ZimFile, String> {
