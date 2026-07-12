@@ -15,6 +15,15 @@ cargo install --path ziminfo
 ziminfo path/to/file.zim
 ```
 
+To include metadata output, pass `-m` before or after the ZIM file path:
+
+```bash
+ziminfo -m path/to/file.zim
+ziminfo path/to/file.zim -m
+```
+
 ## Output
 
-Prints ZIM version, article and cluster counts, main page index, MIME types, and other metadata info.
+By default, prints ZIM version, article and cluster counts, main page index, and MIME types.
+
+With `-m`, also prints all metadata entries and the archive name.
