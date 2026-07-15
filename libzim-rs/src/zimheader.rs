@@ -76,10 +76,6 @@ impl ZimHeader {
 
     /// Checksum digest offset, or `0` when the archive has no checksum.
     pub fn get_checksum_pos(&self) -> u64 {
-        if self.has_checksum() {
-            self.checksum_pos
-        } else {
-            0
-        }
+        if self.has_checksum() { self.checksum_pos } else { 0 }
     }
 }

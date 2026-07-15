@@ -7,6 +7,7 @@ use md5::{Digest, Md5};
 use crate::cache::ClusterCache;
 use crate::cluster::{Cluster, Compression};
 use crate::dirent::{Dirent, DirentData};
+use crate::integrity_check::IntegrityCheck;
 use crate::zimheader::{HEADER_SIZE, ZimHeader};
 
 pub const DEFAULT_CACHE_CAPACITY: usize = 16;
@@ -15,25 +16,6 @@ const CHUNK_SIZE: usize = 1024;
 const DIRENT_MIN_SIZE: u64 = 11;
 const CLUSTER_MIN_SIZE: u64 = 1;
 const TITLE_LISTING_V1_PATH: &str = "listing/titleOrdered/v1";
-
-/// Integrity check kinds, matching libzim's `IntegrityCheck` enum order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IntegrityCheck {
-    /// MD5 of file bytes excluding stored checksum digest
-    Checksum,
-    /// Path pointer offsets fall within the valid data range
-    DirentPtrs,
-    /// Dirents are strictly sorted by `{namespace}/{url}`
-    DirentOrder,
-    /// Title listing indices are in range and sorted by `{namespace}/{title}`
-    TitleIndex,
-    /// Cluster pointer offsets fall within the valid data range
-    ClusterPtrs,
-    /// Every cluster can be parsed successfully
-    ClustersOffsets,
-    /// Article dirent MIME indices are within the MIME list
-    DirentMimeTypes,
-}
 
 pub trait ReadSeek: Read + Seek + Send {}
 impl<T: Read + Seek + Send> ReadSeek for T {}
@@ -54,20 +36,14 @@ impl ClusterStore {
     }
 
     fn parse_cluster_at(&mut self, offset: u64) -> Result<Cluster, String> {
-        self.reader
-            .seek(SeekFrom::Start(offset))
-            .map_err(|e| e.to_string())?;
+        self.reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
         Cluster::parse(&mut self.reader)
     }
 
     fn read_bytes_at(&mut self, offset: u64, size: usize) -> Result<Vec<u8>, String> {
-        self.reader
-            .seek(SeekFrom::Start(offset))
-            .map_err(|e| e.to_string())?;
+        self.reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
         let mut buffer = vec![0u8; size];
-        self.reader
-            .read_exact(&mut buffer)
-            .map_err(|e| e.to_string())?;
+        self.reader.read_exact(&mut buffer).map_err(|e| e.to_string())?;
         Ok(buffer)
     }
 }
@@ -105,9 +81,7 @@ impl ZimFile {
     ) -> Result<Self, String> {
         let header = ZimHeader::parse_header(&mut reader)?;
 
-        let file_size = reader
-            .seek(SeekFrom::End(0))
-            .map_err(|e| e.to_string())?;
+        let file_size = reader.seek(SeekFrom::End(0)).map_err(|e| e.to_string())?;
         if header.has_checksum() && header.get_checksum_pos() + 16 != file_size {
             return Err("Zim file is of bad size or corrupted.".to_string());
         }
@@ -212,9 +186,7 @@ impl ZimFile {
     fn check_dirent_ptrs(&self) -> bool {
         let end = self.valid_data_end();
         for &offset in &self.dirent_pointers {
-            if offset < HEADER_SIZE as u64
-                || offset + DIRENT_MIN_SIZE > end
-            {
+            if offset < HEADER_SIZE as u64 || offset + DIRENT_MIN_SIZE > end {
                 return false;
             }
         }
@@ -922,10 +894,7 @@ mod tests {
         assert!(zim.has_checksum());
         assert!(zim.check());
         assert!(zim.check_integrity(IntegrityCheck::Checksum));
-        assert_eq!(
-            zim.get_checksum(),
-            Some("9f3ecd9546f6c53b35b4c6d4c08ed066".to_string())
-        );
+        assert_eq!(zim.get_checksum(), Some("9f3ecd9546f6c53b35b4c6d4c08ed066".to_string()));
     }
 
     #[test]

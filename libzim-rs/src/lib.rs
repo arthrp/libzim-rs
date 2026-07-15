@@ -4,11 +4,14 @@ use std::path::Path;
 mod cache;
 mod cluster;
 mod dirent;
+mod integrity_check;
 mod zimfile;
 mod zimheader;
 
 pub use cluster::{Cluster, Compression};
 pub use zimfile::*;
+
+use crate::integrity_check::IntegrityCheck;
 
 pub fn parse_zim(file_path: &str) -> Result<ZimFile, String> {
     let p = Path::new(file_path);
