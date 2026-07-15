@@ -26,9 +26,9 @@ Compared to the reference [libzim](https://github.com/openzim/libzim) (ZIM 6.3):
 - [x] Metadata (`M` namespace) access with redirect following
 - [x] Thread-safe LRU cluster cache
 - [x] Cluster compression (`None`, `Zstd`) - legacy ones (zip, etc) not planned to support
+- [x] Checksum verification and integrity checks
 - [ ] Fulltext search (Xapian) and title-based suggestions
 - [ ] Entry lookup by path/title and ordered iteration (path/title/efficient)
 - [ ] Random entry, illustrations/favicon access
 - [ ] Split ZIM (multipart) and embedded ZIM (fd + offset) reading
-- [ ] Checksum verification and integrity checks
 - [ ] ZIM file creation/writing

@@ -63,4 +63,23 @@ impl ZimHeader {
         };
         Ok(header)
     }
+
+    /// Modern ZIM files store the MIME list at offset 80 and may carry a checksum.
+    pub fn has_checksum(&self) -> bool {
+        self.mime_list_pos >= HEADER_SIZE as u64
+    }
+
+    /// Legacy title index table (v0) - should never be present in 6.3+
+    pub fn has_title_listing_v0(&self) -> bool {
+        self.title_idx_pos != u64::MAX
+    }
+
+    /// Checksum digest offset, or `0` when the archive has no checksum.
+    pub fn get_checksum_pos(&self) -> u64 {
+        if self.has_checksum() {
+            self.checksum_pos
+        } else {
+            0
+        }
+    }
 }

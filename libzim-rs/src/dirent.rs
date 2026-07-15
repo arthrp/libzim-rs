@@ -93,6 +93,16 @@ impl Dirent {
     pub fn get_title(&self) -> &str {
         if self.title.is_empty() { &self.url } else { &self.title }
     }
+
+    /// Path used for path-ordered dirent tables: `{namespace}/{url}`.
+    pub fn long_path(&self) -> String {
+        format!("{}/{}", self.namespace, self.url)
+    }
+
+    /// Title used for title-ordered listings: `{namespace}/{title}`.
+    pub fn pseudo_title(&self) -> String {
+        format!("{}/{}", self.namespace, self.get_title())
+    }
 }
 
 fn read_null_terminated_string(reader: &mut impl Read) -> Result<String, String> {

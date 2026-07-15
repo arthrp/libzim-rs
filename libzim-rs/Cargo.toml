@@ -11,4 +11,5 @@ repository = "https://github.com/arthrp/libzim-rs"
 readme = "../README.md"
 
 [dependencies]
+md-5 = "0.11"
 zstd = "0.13"

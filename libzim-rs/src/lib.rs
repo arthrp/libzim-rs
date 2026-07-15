@@ -20,3 +20,14 @@ pub fn parse_zim(file_path: &str) -> Result<ZimFile, String> {
     let z = ZimFile::parse_bytes(fr)?;
     Ok(z)
 }
+
+/// Open a ZIM archive and run the requested integrity checks.
+///
+/// Returns `false` if opening fails or any selected check fails.
+pub fn validate(path: &str, checks: &[IntegrityCheck]) -> bool {
+    let Ok(zim) = parse_zim(path) else {
+        return false;
+    };
+
+    checks.iter().all(|check| zim.check_integrity(*check))
+}
