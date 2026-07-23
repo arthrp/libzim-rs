@@ -12,7 +12,7 @@ fn print_usage(program: &str) -> ! {
 }
 
 fn parse_args(args: &[String]) -> Option<(String, bool)> {
-    let mut path = None;
+    let mut path: Option<String> = None;
     let mut show_metadata = false;
 
     for arg in args {
@@ -30,7 +30,10 @@ fn parse_args(args: &[String]) -> Option<(String, bool)> {
         }
     }
 
-    path.map(|p| (p, show_metadata))
+    match path {
+        Some(p) => Some((p, show_metadata)),
+        None => None,
+    }
 }
 
 fn main() -> ExitCode {

@@ -2,29 +2,52 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::cluster::Cluster;
 
+/// LRU cache of decoded ZIM clusters.
+///
+/// ZIM archives store article payloads in compressed clusters. Decoding a
+/// cluster is relatively expensive, so this cache keeps recently used clusters
+/// in memory keyed by cluster index.
+///
+/// Layout:
+/// - `map` — O(1) lookup from cluster index → decoded [`Cluster`]
+/// - `order` — front = least recently used, back = most recently used
+///
+/// On [`get`](Self::get) or an updating [`put`](Self::put), the index is moved to
+/// the back of `order` (most recently used). When capacity is exceeded, entries
+/// are evicted from the front until the cache fits again.
 pub struct ClusterCache {
+    /// Maximum number of clusters retained (always at least 1).
     capacity: usize,
+    /// Decoded clusters keyed by ZIM cluster index.
     map: HashMap<usize, Cluster>,
+    /// Recency queue: front is LRU, back is MRU.
     order: VecDeque<usize>,
 }
 
 impl ClusterCache {
+    /// Create a cache that holds at most `capacity` clusters
     pub fn new(capacity: usize) -> Self {
         Self {
-            capacity: capacity.max(1),
+            capacity: capacity.max(1), // Capacity is at least 1
             map: HashMap::new(),
             order: VecDeque::new(),
         }
     }
 
+    /// Returns `true` if the given cluster index is currently cached
     pub fn contains(&self, idx: usize) -> bool {
         self.map.contains_key(&idx)
     }
 
+    /// Number of clusters currently held in the cache
     pub fn len(&self) -> usize {
         self.map.len()
     }
 
+    /// Look up a cluster by index, promoting it to most-recently-used on hit.
+    ///
+    /// Returns `None` if the cluster is not cached (a miss does not change
+    /// recency order).
     pub fn get(&mut self, idx: usize) -> Option<&Cluster> {
         if self.map.contains_key(&idx) {
             self.touch(idx);
@@ -34,6 +57,10 @@ impl ClusterCache {
         }
     }
 
+    /// Insert or replace a decoded cluster at `idx`.
+    ///
+    /// After insertion, least-recently-used entries are evicted until
+    /// `len() <= capacity`.
     pub fn put(&mut self, idx: usize, cluster: Cluster) {
         if self.map.insert(idx, cluster).is_some() {
             self.touch(idx);
@@ -48,6 +75,7 @@ impl ClusterCache {
         }
     }
 
+    /// Mark `idx` as most-recently-used by moving it to the back of `order`
     fn touch(&mut self, idx: usize) {
         if let Some(pos) = self.order.iter().position(|&k| k == idx) {
             self.order.remove(pos);
