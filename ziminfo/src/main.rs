@@ -60,7 +60,7 @@ fn main() -> ExitCode {
     println!("Main page: {}", zim_file.header.main_page);
 
     println!("Checksum: {}", zim_file.get_checksum().unwrap_or_default());
-    
+
     //We can live with allocating string per byte here
     let b: String = zim_file.header.uuid.map(|b| format!("{b:02x}")).concat();
     let uuid = format!("{}-{}-{}-{}-{}", &b[..8], &b[8..12], &b[12..16], &b[16..20], &b[20..]);
